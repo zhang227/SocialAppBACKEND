@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"reflect"
+	"github.com/pborman/uuid"
 )
 
 
@@ -64,17 +65,43 @@ func main() {
 
 //handle post
 func handlerPost(w http.ResponseWriter, r *http.Request) {
-	// parse from body of request to get a json object
+	// Parse from body of request to get a json object.
 	fmt.Println("Received one post request")
-	//decode json to go
-	decoder := json.NewDecoder(r.Body);
+	decoder := json.NewDecoder(r.Body)
 	var p Post
-	//handle error
 	if err := decoder.Decode(&p); err != nil {
 		panic(err)
 		return
 	}
-	fmt.Fprintf(w, "Post received: %s\n", p.Message)
+	id := uuid.New()
+	// Save to ES.
+	saveToES(&p, id)
+
+}
+
+// Save a post to ElasticSearch
+func saveToES(p *Post, id string) {
+	// Create a client
+	es_client, err := elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
+	if err != nil {
+		panic(err)
+		return
+	}
+
+	// Save it to index
+	_, err = es_client.Index().
+		Index(INDEX).
+		Type(TYPE).
+		Id(id).
+		BodyJson(p).
+		Refresh(true).
+		Do()
+	if err != nil {
+		panic(err)
+		return
+	}
+
+	fmt.Printf("Post is saved to Index: %s\n", p.Message)
 }
 
 //handle search
@@ -86,7 +113,7 @@ const (
 	//PROJECT_ID = "around-xxx"
 	//BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud.
-	ES_URL = "http://YOUR_ES_IP_ADDRESS:9200"
+	ES_URL = "http://35.229.49.41:9200"
 )
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
