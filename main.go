@@ -106,19 +106,18 @@ func saveToES(p *Post, id string) {
 	}
 
 	fmt.Printf("Post is saved to Index: %s\n", p.Message)
-
+	//save to BT
 	ctx := context.Background()
-	// you must update project name here
 	bt_client, err := bigtable.NewClient(ctx, PROJECT_ID, BT_INSTANCE)
 	if err != nil {
 		panic(err)
 		return
 	}
-
+	//config table
 	tbl := bt_client.Open("post")
 	mut := bigtable.NewMutation()
 	t := bigtable.Now()
-
+	//from google doc. bigtabke write column family
 	mut.Set("post", "user", t, []byte(p.User))
 	mut.Set("post", "message", t, []byte(p.Message))
 	mut.Set("location", "lat", t, []byte(strconv.FormatFloat(p.Location.Lat, 'f', -1, 64)))
@@ -142,7 +141,7 @@ const (
 	// Needs to update
 	PROJECT_ID = "civic-circuit-194222"
 	BT_INSTANCE = "around-post"
-		ES_URL = "http://35.231.21.179:9200"
+		ES_URL = "http://35.229.64.150:9200"
 )
 
 func containsFilteredWords(s *string) bool {
