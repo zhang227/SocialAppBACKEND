@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"github.com/pborman/uuid"
 	"strings"
-	"context"
-	"cloud.google.com/go/bigtable"
+	//"context"
+	//"cloud.google.com/go/bigtable"
 
 )
 
@@ -106,6 +106,7 @@ func saveToES(p *Post, id string) {
 	}
 
 	fmt.Printf("Post is saved to Index: %s\n", p.Message)
+	/*
 	//save to BT
 	ctx := context.Background()
 	bt_client, err := bigtable.NewClient(ctx, PROJECT_ID, BT_INSTANCE)
@@ -130,7 +131,7 @@ func saveToES(p *Post, id string) {
 	}
 	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
 
-
+*/
 }
 
 //handle search
@@ -139,9 +140,9 @@ const (
 	TYPE = "post"
 	DISTANCE = "200km"
 	// Needs to update
-	PROJECT_ID = "civic-circuit-194222"
-	BT_INSTANCE = "around-post"
-		ES_URL = "http://35.229.64.150:9200"
+	//PROJECT_ID = "civic-circuit-194222"
+	//BT_INSTANCE = "around-post"
+	ES_URL = "http://35.229.64.150:9200"
 )
 
 func containsFilteredWords(s *string) bool {
