@@ -1,18 +1,25 @@
 package main
+
 import (
 	elastic "gopkg.in/olivere/elastic.v3"
 	"fmt"
+	"reflect"
 	"net/http"
 	"encoding/json"
-	"log"
 	"strconv"
-	"reflect"
-	"github.com/pborman/uuid"
-	"strings"
-	//"context"
+	"log"
 	//"cloud.google.com/go/bigtable"
+	"github.com/pborman/uuid"
+	//"context"
 
+	"github.com/auth0/go-jwt-middleware"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
+
+	"strings"
 )
+
+var mySigningKey = []byte("secret")
 
 
 type Location  struct{
@@ -62,13 +69,31 @@ func main() {
 		}
 	}
 	fmt.Println("started-service")
-	http.HandleFunc("/post", handlerPost)
-	http.HandleFunc("/search", handlerSearch)
+	r := mux.NewRouter()
+	//using middleware to wrap if token not pass not go in
+	var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+			return mySigningKey, nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
+
+	r.Handle("/post", jwtMiddleware.Handler(http.HandlerFunc(handlerPost))).Methods("POST")
+	r.Handle("/search", jwtMiddleware.Handler(http.HandlerFunc(handlerSearch))).Methods("GET")
+	//first time login  no token
+	r.Handle("/login", http.HandlerFunc(loginHandler)).Methods("POST")
+	r.Handle("/signup", http.HandlerFunc(signupHandler)).Methods("POST")
+	http.Handle("/", r)
+
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 //handle post
 func handlerPost(w http.ResponseWriter, r *http.Request) {
+	//from login handler
+	user := r.Context().Value("user")
+	claims := user.(*jwt.Token).Claims
+	username := claims.(jwt.MapClaims)["username"]
 	// Parse from body of request to get a json object.
 	fmt.Println("Received one post request")
 	decoder := json.NewDecoder(r.Body)
@@ -77,6 +102,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 		return
 	}
+	p.User = username.(string)
 	id := uuid.New()
 	// Save to ES.
 	saveToES(&p, id)
@@ -142,7 +168,7 @@ const (
 	// Needs to update
 	//PROJECT_ID = "civic-circuit-194222"
 	//BT_INSTANCE = "around-post"
-	ES_URL = "http://35.229.64.150:9200"
+	ES_URL = "http://34.211.21.63:9200"
 )
 
 func containsFilteredWords(s *string) bool {
