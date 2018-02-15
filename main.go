@@ -17,8 +17,12 @@ import (
 	"github.com/gorilla/mux"
 
 	"strings"
-)
+	"context"
+	"cloud.google.com/go/storage"
 
+	"io"
+)
+//symmetric encrypt
 var mySigningKey = []byte("secret")
 
 
@@ -32,6 +36,7 @@ type Post struct {
 	User     string `json:"user"`
 	Message  string  `json:"message"`
 	Location Location `json:"location"`
+	Url    string `json:"url"`
 }
 
 
@@ -107,7 +112,42 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	// Save to ES.
 	saveToES(&p, id)
 
+
+
 }
+
+func saveToGCS(ctx context.Context, r io.Reader, bucket, name string) (*storage.ObjectHandle, *storage.ObjectAttrs, error) {
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer client.Close()
+
+	bh := client.Bucket(bucket)
+	// Next check if the bucket exists
+	if _, err = bh.Attrs(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	obj := bh.Object(name)
+	w := obj.NewWriter(ctx)
+	if _, err := io.Copy(w, r); err != nil {
+		return nil, nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, nil, err
+	}
+
+
+	if err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+		return nil, nil, err
+	}
+
+	attrs, err := obj.Attrs(ctx)
+	fmt.Printf("Post is saved to GCS: %s\n", attrs.MediaLink)
+	return obj, attrs, err
+}
+
 
 // Save a post to ElasticSearch
 func saveToES(p *Post, id string) {
@@ -169,6 +209,7 @@ const (
 	//PROJECT_ID = "civic-circuit-194222"
 	//BT_INSTANCE = "around-post"
 	ES_URL = "http://34.211.21.63:9200"
+	BUCKET_NAME = "post-image-194222"
 )
 
 func containsFilteredWords(s *string) bool {
