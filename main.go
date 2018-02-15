@@ -93,29 +93,85 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+/*
+func handlerPost(w http.ResponseWriter, r *http.Request) {
+  //from login handler
+  user := r.Context().Value("user")
+  claims := user.(*jwt.Token).Claims
+  username := claims.(jwt.MapClaims)["username"]
+  // Parse from body of request to get a json object.
+  fmt.Println("Received one post request")
+  decoder := json.NewDecoder(r.Body)
+  var p Post
+  if err := decoder.Decode(&p); err != nil {
+    panic(err)
+    return
+  }
+  p.User = username.(string)
+  id := uuid.New()
+  // Save to ES.
+  saveToES(&p, id)
+
+}
+ */
 //handle post
 func handlerPost(w http.ResponseWriter, r *http.Request) {
-	//from login handler
-	user := r.Context().Value("user")
-	claims := user.(*jwt.Token).Claims
-	username := claims.(jwt.MapClaims)["username"]
-	// Parse from body of request to get a json object.
-	fmt.Println("Received one post request")
-	decoder := json.NewDecoder(r.Body)
-	var p Post
-	if err := decoder.Decode(&p); err != nil {
-		panic(err)
+	// Other codes
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+
+
+	// 32 << 20 is the maxMemory param for ParseMultipartForm, equals to 32MB (1MB = 1024 * 1024 bytes = 2^20 bytes)
+	// After you call ParseMultipartForm, the file will be saved in the server memory with maxMemory size.
+	// If the file size is larger than maxMemory, the rest of the data will be saved in a system temporary file.
+	r.ParseMultipartForm(32 << 20)
+
+	// Parse from form data.
+	fmt.Printf("Received one post request %s\n", r.FormValue("message"))
+	lat, _ := strconv.ParseFloat(r.FormValue("lat"), 64)
+	lon, _ := strconv.ParseFloat(r.FormValue("lon"), 64)
+	p := &Post{
+		User:    "1111",
+		Message: r.FormValue("message"),
+		Location: Location{
+			Lat: lat,
+			Lon: lon,
+		},
+	}
+
+	id := uuid.New()
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Image is not available", http.StatusInternalServerError)
+		fmt.Printf("Image is not available %v.\n", err)
 		return
 	}
-	p.User = username.(string)
-	id := uuid.New()
+	defer file.Close()
+
+	ctx := context.Background()
+
+	// replace it with your real bucket name.
+	_, attrs, err := saveToGCS(ctx, file, BUCKET_NAME, id)
+	if err != nil {
+		http.Error(w, "GCS is not setup", http.StatusInternalServerError)
+		fmt.Printf("GCS is not setup %v\n", err)
+		return
+	}
+
+	// Update the media link after saving to GCS.
+	p.Url = attrs.MediaLink
+
 	// Save to ES.
-	saveToES(&p, id)
+	saveToES(p, id)
 
-
+	// Save to BigTable.
+	//saveToBigTable(p, id)
 
 }
 
+//save to google cloud storage
 func saveToGCS(ctx context.Context, r io.Reader, bucket, name string) (*storage.ObjectHandle, *storage.ObjectAttrs, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
